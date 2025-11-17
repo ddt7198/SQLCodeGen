@@ -1,0 +1,59 @@
+CREATE OR REPLACE PROCEDURE final_{{ DATA_SUBJECT }}_{{ SOURCE_SYSTEM }}_{{ SOURCE_SCHEMA}}.{{ TABLE_NAME }}_proc(table_id integer, latest_partition character varying(256))
+ LANGUAGE plpgsql
+AS $$
+BEGIN
+-- LOAD TYPE: FU
+    IF table_id IS NULL or latest_partition  IS NULL THEN
+        RAISE EXCEPTION 'The input parameters cannot be Null';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM   pg_table_def
+        WHERE  schemaname = 'final_{{ DATA_SUBJECT }}_{{ SOURCE_SYSTEM }}_{{ SOURCE_SCHEMA}}'
+        AND    tablename  = '{{ TABLE_NAME }}_ld'
+    ) 
+    THEN 
+        DROP TABLE final_{{ DATA_SUBJECT }}_{{ SOURCE_SYSTEM }}_{{ SOURCE_SCHEMA}}.{{ TABLE_NAME }}_ld; 
+    ELSE
+        CREATE TABLE final_{{ DATA_SUBJECT }}_{{ SOURCE_SYSTEM }}_{{ SOURCE_SCHEMA}}.{{ TABLE_NAME }}_ld
+        {{ switch_dist_style(DIST_STYLE) }}
+        AS
+        SELECT {%- for key, column in COLUMNS.items() %}
+            {{ data_transformation(column.COLUMN_NAME, column.DATA_TYPE, column.DATA_LENGTH, column.NULLABLE) }},
+            {%- endfor %}
+            {{ hash_generator(COLUMNS, LOAD_TYPE) }}         
+        FROM final_{{ DATA_SUBJECT }}_{{ SOURCE_SYSTEM }}_{{ SOURCE_SCHEMA}}.{{ TABLE_NAME }}_temp;
+    END IF;
+
+    UPDATE final_{{ DATA_SUBJECT }}_{{ SOURCE_SYSTEM }}_{{ SOURCE_SCHEMA}}.{{ TABLE_NAME }} tgt
+    SET {%- for key, column in COLUMNS.items() %}
+        {{ column.COLUMN_NAME }}={{ column.COLUMN_NAME }},
+        {%- endfor %}
+        ingest_partition = latest_partition,
+        transaction_flag = 'U'
+    FROM final_{{ DATA_SUBJECT }}_{{ SOURCE_SYSTEM }}_{{ SOURCE_SCHEMA}}.{{ TABLE_NAME }}_ld as src
+    WHERE tgt.hash_key = src.hash_key;
+    
+    INSERT INTO final_{{ DATA_SUBJECT }}_{{ SOURCE_SYSTEM }}_{{ SOURCE_SCHEMA}}.{{ TABLE_NAME }}
+    (SELECT {%- for key, column in COLUMNS.items() %}
+        {{ column.COLUMN_NAME }} AS {{ column.COLUMN_NAME }},
+        {%- endfor %}
+        hash_key AS hash_key,
+        ingest_partition AS ingest_partition,
+        'I' AS transaction_flag,
+    FROM final_{{ DATA_SUBJECT }}_{{ SOURCE_SYSTEM }}_{{ SOURCE_SCHEMA}}.{{ TABLE_NAME }}_ld src
+    WHERE NOT EXISTS(
+        SELECT 1 
+        FROM    final_{{ DATA_SUBJECT }}_{{ SOURCE_SYSTEM }}_{{ SOURCE_SCHEMA}}.{{ TABLE_NAME }} tgt 
+        WHERE   tgt.customer_code =  src.customer_code
+        AND     tgt.transaction_flag <> 'D'
+    )
+    );
+
+    CALL update_config(table_id,latest_partition);
+
+EXCEPTION WHEN OTHERS THEN
+    EXECUTE 'CALL poc04.error_log_proc(' || table_id || ', ' || QUOTE_LITERAL(SQLERRM) || ', ' || QUOTE_LITERAL(SQLSTATE) || ', ' || QUOTE_LITERAL(to_char(GETDATE(), 'YYYY-MM-DD HH12:MIPM')) || ');';
+END;
+$$

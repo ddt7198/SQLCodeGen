@@ -1,0 +1,30 @@
+SOURCE_COLUMN: \input\source_columns.xlsx
+
+TABLE_LIST: \input\table_list.xlsx
+
+OUTPUT_FOLDER: 
+  code: \output\code
+  metadata: \output\metadata
+
+TEMPLATE:
+
+  TEMP_DDL:
+    location: \template\TEMP_DDL.jinja2
+    type: ddl
+    mapping_path: \input\mapping\mapping_src2temp.xlsx
+  FINAL_DDL:
+    location: \template\FINAL_DDL.jinja2
+    type: ddl
+    mapping_path: \input\mapping\mapping_temp2final.xlsx
+  TEMP2FINAL_FA:
+    location: \template\TEMP2FINAL_FA.jinja2
+    type: proc
+    mapping_path: \input\mapping\mapping_temp2final.xlsx
+  TEMP2FINAL_SCD2:
+    location: \template\TEMP2FINAL_SCD2.jinja2
+    type: proc
+    mapping_path: \input\mapping\mapping_temp2final.xlsx
+  TEMP2FINAL_FU:
+    location: \template\TEMP2FINAL_FU.jinja2
+    type: proc
+    mapping_path: \input\mapping\mapping_temp2final.xlsx

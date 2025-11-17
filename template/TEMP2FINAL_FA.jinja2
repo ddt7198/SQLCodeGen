@@ -1,0 +1,29 @@
+CREATE OR REPLACE PROCEDURE final_{{ DATA_SUBJECT }}_{{ SOURCE_SYSTEM }}_{{ SOURCE_SCHEMA}}.{{ TABLE_NAME }}_proc(table_id integer, latest_partition character varying(256))
+ LANGUAGE plpgsql
+AS $$
+BEGIN
+-- LOAD TYPE: FA
+    IF table_id IS NULL OR latest_partition  IS NULL THEN
+        RAISE EXCEPTION 'The input parameters cannot be Null';
+    END IF;
+    -- Delete records which ingest partition = latest partition
+    DELETE FROM final_{{ DATA_SUBJECT }}_{{ SOURCE_SYSTEM }}_{{ SOURCE_SCHEMA}}.{{ TABLE_NAME }} WHERE ingest_partition >= latest_partition;
+
+    INSERT INTO final_{{ DATA_SUBJECT }}_{{ SOURCE_SYSTEM }}_{{ SOURCE_SCHEMA}}.{{ TABLE_NAME }}
+    (SELECT {%- for key, column in COLUMNS.items() %}
+        {{ data_transformation(column.COLUMN_NAME, column.DATA_TYPE, column.DATA_LENGTH, column.NULLABLE) }},
+        {%- endfor %}
+        {{ hash_generator(COLUMNS, LOAD_TYPE) }}
+        latest_partition AS ingest_partition,
+        'I' AS transaction_flag
+     FROM final_{{ DATA_SUBJECT }}_{{ SOURCE_SYSTEM }}_{{ SOURCE_SCHEMA}}.{{ TABLE_NAME }}_temp
+    );
+     
+    CALL update_config(table_id,latest_partition);
+
+EXCEPTION WHEN OTHERS THEN
+    EXECUTE 'CALL poc04.error_log_proc(' || table_id || ', ' || QUOTE_LITERAL(SQLERRM) || ', ' || QUOTE_LITERAL(SQLSTATE) || ', ' || QUOTE_LITERAL(to_char(GETDATE(), 'YYYY-MM-DD HH12:MIPM')) || ');';
+END;
+$$
+
+

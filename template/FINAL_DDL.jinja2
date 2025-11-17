@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS final_{{ DATA_SUBJECT }}_{{ SOURCE_SYSTEM }}_{{ SOURCE_SCHEMA}}.{{ TABLE_NAME }}
+(
+ {%- for key, column in COLUMNS.items() %}
+ {{ column.COLUMN_NAME }} {{ column.DATA_TYPE }}{% if column.DATA_LENGTH == '<NA>' %}{% else %}({{ column.DATA_LENGTH }}){% endif %} {% if column.NULLABLE == 'Y' %}NULL{% else %}NOT NULL{% endif %},
+ {%- endfor %}
+ hash_key VARBINARY(32) NULL,{% if LOAD_TYPE == 'SCD2' %}{{ "\n " }}surrogate_key VARBINARY(32) NULL,{% else %}{% endif %}
+ ingest_partition VARCHAR(10) NULL,
+ transaction_flag VARCHAR(1) NULL
+) 
+{{ switch_dist_style(DIST_STYLE) }};

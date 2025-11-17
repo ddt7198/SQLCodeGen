@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS final_{{ DATA_SUBJECT }}_{{ SOURCE_SYSTEM }}_{{ SOURCE_SCHEMA}}.{{ TABLE_NAME }}_temp
+(
+ {%- for key, column in COLUMNS.items() %}
+ {{ column.COLUMN_NAME }} {{ column.DATA_TYPE }}{% if column.DATA_LENGTH == '<NA>' %}{% else %}({{ column.DATA_LENGTH }}){% endif %} {% if column.NULLABLE == 'Y' %}NULL{% else %}NOT NULL{% endif %}{% if not loop.last %},{% endif %}
+ {%- endfor %}
+) 
+DISTSTYLE EVEN;
